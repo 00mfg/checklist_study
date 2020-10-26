@@ -52,3 +52,8 @@ def index():
     user = User.objects.first()
     movies = Movie.objects.all()
     return render_template('index.html', movies=movies, user=user)
+
+@app.errorhandler(404)  # 传入要处理的错误代码
+def page_not_found(e):  # 接受异常对象作为参数
+    user = User.objects.first()
+    return render_template('404.html', user=user), 404  # 返回模板和状态码
