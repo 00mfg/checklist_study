@@ -2,11 +2,12 @@ import os
 import sys
 import click
 
-from flask import Flask, render_template
+from flask import Flask, render_template, url_for, redirect, flash, request
 from flask_mongoengine import MongoEngine
 
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'dev'
 app.config['MONGODB_SETTINGS'] = {
     'db': 'watchlist',
 }
@@ -47,13 +48,58 @@ def forge():
     click.echo('Done.')
 
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    user = User.objects.first()
+    if request.method == 'POST':
+        title = request.form.get('title')
+        year = request.form.get('year')
+        if not title or not year or len(year) > 4 or len(title) > 60:
+            flash('请输入正确信息')
+            return redirect(url_for('index'))
+        movie = Movie(title=title, year=year).save()
+        flash('添加成功')
+        return redirect(url_for('index'))
+
     movies = Movie.objects.all()
-    return render_template('index.html', movies=movies, user=user)
+    return render_template('index.html', movies=movies)
+
+
+@app.route('/movie/edit/<movie_id>', methods=['GET', 'POST'])
+def edit(movie_id):
+    movie = Movie.objects.get(id=movie_id)
+
+    if request.method == 'POST':  # 处理编辑表单的提交请求
+        title = request.form['title']
+        year = request.form['year']
+
+        if not title or not year or len(year) > 4 or len(title) > 60:
+            flash('请输入正确信息')
+            return redirect(url_for('edit', movie_id=movie_id))  # 重定向回对应的编辑页面
+
+        movie.title = title  # 更新标题
+        movie.year = year  # 更新年份
+        movie.save()
+        flash('更新成功.')
+        return redirect(url_for('index'))  # 重定向回主页
+
+    return render_template('edit.html', movie=movie)  # 传入被编辑的电影记录
+
+
+@app.route('/movie/delete/<movie_id>', methods=['POST'])  # 限定只接受 POST 请求
+def delete(movie_id):
+    movie = Movie.objects.get_or_404(id=movie_id)  # 获取电影记录
+    movie.delete()
+    flash('删除成功')
+    return redirect(url_for('index'))  # 重定向回主页
+
 
 @app.errorhandler(404)  # 传入要处理的错误代码
 def page_not_found(e):  # 接受异常对象作为参数
     user = User.objects.first()
     return render_template('404.html', user=user), 404  # 返回模板和状态码
+
+
+@app.context_processor
+def inject_user():  # 函数名可以随意修改
+    user = User.objects.first()
+    return dict(user=user)  # 需要返回字典，等同于 return {'user': user}
